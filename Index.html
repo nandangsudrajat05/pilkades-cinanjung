@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulasi Pilkades Cinanjung</title>
+  
+  <!-- Library QR Code Scanner & Generator -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    h1, h2 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+    .subtitle { text-align: center; color: #7f8c8d; margin-top: 0; margin-bottom: 20px; }
+
+    /* DPT Counter Bar */
+    .dpt-counter-bar {
+      background: #ebf5fb;
+      border: 1px solid #3498db;
+      color: #2980b9;
+      padding: 10px 15px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+
+    /* Section Control */
+    .section { display: none; }
+    .active { display: block; }
+
+    /* Scanner UI */
+    #reader { width: 100%; max-width: 450px; margin: 0 auto; border-radius: 8px; overflow: hidden; border: 2px dashed #bdc3c7; }
+    
+    .manual-box { background: #eef2f5; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
+    .manual-box input { padding: 10px; width: 60%; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+    .manual-box button { padding: 10px 15px; font-size: 16px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+    .alert { padding: 12px; border-radius: 6px; margin-top: 15px; text-align: center; font-weight: bold; }
+    .alert-danger { background-color: #f8d7da; color: #721c24; }
+    .alert-success { background-color: #d4edda; color: #155724; }
+
+    /* Dashboard Kandidat */
+    .kandidat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-top: 20px; }
+    .card-kandidat { border: 2px solid #e0e0e0; border-radius: 10px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .card-kandidat:hover { border-color: #3498db; transform: translateY(-3px); }
+    .card-kandidat.selected { border-color: #2ecc71; background-color: #e8f8f5; font-weight: bold; }
+    .card-kandidat h3 { margin: 10px 0 0 0; color: #2c3e50; }
+
+    /* Tombol Pilihan & Konfirmasi */
+    .action-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 25px; }
+    .btn { padding: 12px 25px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .btn-setuju { background-color: #2ecc71; color: white; }
+    .btn-setuju:hover { background-color: #27ae60; }
+    .btn-batal { background-color: #e74c3c; color: white; }
+    .btn-batal:hover { background-color: #c0392b; }
+    .btn-download { background-color: #e67e22; color: white; margin-top: 15px; width: 100%; max-width: 300px; }
+    .btn-download:hover { background-color: #d35400; }
+    .btn-reset { background-color: #3498db; color: white; margin-top: 15px; width: 100%; }
+
+    /* Bukti QR & Card */
+    .receipt-card {
+      background: #ffffff;
+      border: 2px solid #2c3e50;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 320px;
+      margin: 20px auto;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    #qrcode-bukti { display: flex; justify-content: center; margin: 15px 0; }
+    .info-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #3498db; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>E-Voting Pilkades Cinanjung</h1>
+    <p class="subtitle">Simulasi Pemilihan Kepala Desa</p>
+
+    <!-- Indicator Jumlah DPT -->
+    <div class="dpt-counter-bar">
+      Total DPT Terdaftar: <span id="max-dpt">40</span> |
+      Sudah Memilih: <span id="used-dpt">0</span> |
+      Sisa Kuota: <span id="remaining-dpt">40</span>
+    </div>
+
+    <!-- TAHAP 1: SCAN DPT -->
+    <div id="step-scan" class="section active">
+      <h2>Langkah 1: Verifikasi DPT Pemilih</h2>
+      <p style="text-align: center; font-size: 14px; color: #666;">
+        Scan QR Code DPT Anda menggunakan kamera atau drag/pilih file gambar ke kotak bawah.
+      </p>
+
+      <div id="reader"></div>
+
+      <div class="manual-box">
+        <p style="margin-top:0;"><strong>Atau Masukkan Kode DPT Manual:</strong></p>
+        <input type="text" id="manual-dpt-input" placeholder="Contoh: DPT-001 s/d DPT-040">
+        <button onclick="prosesDptManual()">Verifikasi</button>
+      </div>
+
+      <div id="scan-message"></div>
+    </div>
+
+    <!-- TAHAP 2: DASHBOARD PILIHAN KANDIDAT -->
+    <div id="step-vote" class="section">
+      <div class="info-box">
+        <strong>Status DPT:</strong> Terverifikasi (<span id="dpt-id-display"></span>)
+      </div>
+      <h2>Pilih Kandidat Calon Kepala Desa</h2>
+      
+      <div class="kandidat-grid">
+        <div class="card-kandidat" onclick="pilihKandidat('Apel', this)">
+          <div style="font-size: 40px;">🍎</div>
+          <h3>Apel</h3>
+        </div>
+        <div class="card-kandidat" onclick="pilihKandidat('Pisang', this)">
+          <div style="font-size: 40px;">🍌</div>
+          <h3>Pisang</h3>
+        </div>
+        <div class="card-kandidat" onclick="pilihKandidat('Jeruk', this)">
+          <div style="font-size: 40px;">🍊</div>
+          <h3>Jeruk</h3>
+        </div>
+        <div class="card-kandidat" onclick="pilihKandidat('Manggis', this)">
+          <div style="font-size: 40px;">🥭</div>
+          <h3>Manggis</h3>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn btn-setuju" onclick="konfirmasiPilihan(true)">Setuju</button>
+        <button class="btn btn-batal" onclick="konfirmasiPilihan(false)">Tidak Setuju / Batal</button>
+      </div>
+    </div>
+
+    <!-- TAHAP 3: BUKTI PILIHAN (QR CODE) -->
+    <div id="step-result" class="section">
+      <div class="alert alert-success">
+        Terima kasih! Suara Anda telah berhasil direkam secara sah.
+      </div>
+      
+      <div class="receipt-card" id="receipt-area">
+        <h3 style="margin: 0; color: #2c3e50;">BUKTI TELAH MEMILIH</h3>
+        <p style="font-size: 12px; color: #7f8c8d; margin-top: 2px;">Pilkades Cinanjung</p>
+        <hr style="border: none; border-top: 1px dashed #ccc;">
+        
+        <p style="margin: 5px 0; font-size: 14px;"><strong>ID DPT:</strong> <span id="receipt-dpt-id"></span></p>
+        <p style="margin: 5px 0; font-size: 12px; color: #27ae60;"><strong>STATUS: SAH / SUDAH MEMILIH</strong></p>
+        
+        <div id="qrcode-bukti"></div>
+        
+        <p style="font-size: 11px; color: #95a5a6; margin-bottom: 0;" id="receipt-time"></p>
+      </div>
+
+      <div style="text-align: center;">
+        <button class="btn btn-download" onclick="downloadBuktiJPG()">🖼️ Cetak / Download Bukti (.JPG)</button>
+        <button class="btn btn-reset" onclick="resetKeAwal()">Selesai & Sesi Pemilih Selanjutnya</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MAX_DPT = 40;
+    let dptSudahMemilih = new Set();
+    let currentDptId = "";
+    let pilihanKandidatSaatIni = "";
+    let html5QrcodeScanner;
+
+    function updateDptCounters() {
+      const usedCount = dptSudahMemilih.size;
+      const remainingCount = MAX_DPT - usedCount;
+
+      document.getElementById("max-dpt").innerText = MAX_DPT;
+      document.getElementById("used-dpt").innerText = usedCount;
+      document.getElementById("remaining-dpt").innerText = remainingCount;
+    }
+
+    function initScanner() {
+      try {
+        const config = {
+          fps: 15,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
+        };
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", config, false);
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+      } catch (e) {
+        console.log("Scanner kamera belum aktif atau tidak didukung.");
+      }
+    }
+
+    function verifikasiDPT(dptCode) {
+      const msgDiv = document.getElementById("scan-message");
+
+      // Validasi Batas Maksimal DPT (Maksimal 40 Pemilih)
+      if (dptSudahMemilih.size >= MAX_DPT && !dptSudahMemilih.has(dptCode)) {
+        msgDiv.innerHTML = `<div class="alert alert-danger">⚠️ KUOTA SIMULASI PENUH! Maksimal ${MAX_DPT} DPT telah memilih.</div>`;
+        return;
+      }
+
+      // Validasi Pemilih Ganda (Tidak Bisa Memilih 2x)
+      if (dptSudahMemilih.has(dptCode)) {
+        msgDiv.innerHTML = `<div class="alert alert-danger">⚠️ DPT (${dptCode}) SUDAH MENGGUNAKAN HAK PILIH! Tidak bisa memilih dua kali.</div>`;
+        return;
+      }
+
+      currentDptId = dptCode;
+      msgDiv.innerHTML = "";
+      
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(e => console.log(e));
+      }
+
+      document.getElementById("dpt-id-display").innerText = currentDptId;
+      switchSection("step-vote");
+    }
+
+    function onScanSuccess(decodedText) {
+      verifikasiDPT(decodedText);
+    }
+
+    function onScanFailure(error) {}
+
+    function prosesDptManual() {
+      const inputVal = document.getElementById("manual-dpt-input").value.trim();
+      if (!inputVal) {
+        alert("Silakan masukkan Kode / ID DPT terlebih dahulu!");
+        return;
+      }
+      verifikasiDPT(inputVal);
+    }
+
+    function pilihKandidat(namaKandidat, element) {
+      pilihanKandidatSaatIni = namaKandidat;
+      document.querySelectorAll('.card-kandidat').forEach(card => card.classList.remove('selected'));
+      element.classList.add('selected');
+    }
+
+    function konfirmasiPilihan(isSetuju) {
+      if (!isSetuju) {
+        alert("Pilihan dibatalkan. Silakan pilih kembali kandidat Anda.");
+        pilihanKandidatSaatIni = "";
+        document.querySelectorAll('.card-kandidat').forEach(card => card.classList.remove('selected'));
+        return;
+      }
+
+      if (!pilihanKandidatSaatIni) {
+        alert("Silakan pilih salah satu kandidat terlebih dahulu!");
+        return;
+      }
+
+      // Catat DPT ke dalam memori
+      dptSudahMemilih.add(currentDptId);
+      updateDptCounters();
+
+      generateBuktiQR();
+      switchSection("step-result");
+    }
+
+    function generateBuktiQR() {
+      const qrContainer = document.getElementById("qrcode-bukti");
+      qrContainer.innerHTML = "";
+
+      const now = new Date().toLocaleString("id-ID");
+      document.getElementById("receipt-dpt-id").innerText = currentDptId;
+      document.getElementById("receipt-time").innerText = "Waktu: " + now;
+
+      const dataBukti = JSON.stringify({
+        status: "SUDAH_MEMILIH",
+        dpt_id: currentDptId,
+        lokasi: "Pilkades Cinanjung",
+        waktu: now
+      });
+
+      new QRCode(qrContainer, {
+        text: dataBukti,
+        width: 160,
+        height: 160,
+        colorDark : "#2c3e50",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+      });
+    }
+
+    // Fungsi Cetak/Download Bukti Pemilihan berupa File .JPG
+    function downloadBuktiJPG() {
+      const qrImg = document.querySelector("#qrcode-bukti img");
+      if (!qrImg) {
+        alert("QR Code sedang disiapkan, silakan coba lagi.");
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      canvas.width = 400;
+      canvas.height = 450;
+
+      // Fill Background White
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Card Border
+      ctx.strokeStyle = "#2c3e50";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+
+      // Header Text
+      ctx.fillStyle = "#2c3e50";
+      ctx.font = "bold 22px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("BUKTI TELAH MEMILIH", canvas.width / 2, 55);
+
+      ctx.fillStyle = "#7f8c8d";
+      ctx.font = "14px Arial";
+      ctx.fillText("Simulasi Pilkades Cinanjung", canvas.width / 2, 78);
+
+      // Divider Line
+      ctx.beginPath();
+      ctx.setLineDash([5, 5]);
+      ctx.moveTo(30, 95);
+      ctx.lineTo(370, 95);
+      ctx.strokeStyle = "#bdc3c7";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Info DPT & Status
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#2c3e50";
+      ctx.font = "bold 16px Arial";
+      ctx.fillText("ID DPT: " + currentDptId, canvas.width / 2, 125);
+
+      ctx.fillStyle = "#27ae60";
+      ctx.font = "bold 14px Arial";
+      ctx.fillText("STATUS: SAH / SUDAH MEMILIH", canvas.width / 2, 150);
+
+      // Draw QR Image onto Canvas
+      const img = new Image();
+      img.src = qrImg.src;
+      img.onload = function() {
+        ctx.drawImage(img, (canvas.width - 180) / 2, 170, 180, 180);
+
+        // Footer Timestamp
+        ctx.fillStyle = "#7f8c8d";
+        ctx.font = "12px Arial";
+        ctx.fillText(document.getElementById("receipt-time").innerText, canvas.width / 2, 380);
+
+        // Export Canvas to JPG File
+        const link = document.createElement("a");
+        link.download = `Bukti_Memilih_${currentDptId}.jpg`;
+        link.href = canvas.toDataURL("image/jpeg", 0.9);
+        link.click();
+      };
+    }
+
+    function switchSection(sectionId) {
+      document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+      document.getElementById(sectionId).classList.add('active');
+    }
+
+    function resetKeAwal() {
+      currentDptId = "";
+      pilihanKandidatSaatIni = "";
+      document.getElementById("manual-dpt-input").value = "";
+      document.querySelectorAll('.card-kandidat').forEach(card => card.classList.remove('selected'));
+      switchSection("step-scan");
+      initScanner();
+    }
+
+    window.onload = function() {
+      updateDptCounters();
+      initScanner();
+    };
+  </script>
+</body>
+</html>
